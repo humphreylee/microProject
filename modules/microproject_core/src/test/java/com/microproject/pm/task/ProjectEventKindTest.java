@@ -1,7 +1,6 @@
 /*******************************************************************************
  * MIT License
  *
- * Copyright (c) 2012-2019 ProjectLibre, Inc.  (Previous Copyright Holder)
  * Copyright (c) 2026 microProject
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,17 +21,24 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *******************************************************************************/
-package com.microproject.pm.costing;
+package com.microproject.pm.task;
 
-public interface HasCostRateIndex {
-    int getCostRateIndex();
-    void setCostRateIndex(int val);
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-    default CostRateIndex.Kind getCostRateIndexKind() {
-        return CostRateIndex.Kind.fromCodeOrNull(getCostRateIndex());
-    }
+import org.junit.jupiter.api.Test;
 
-    default void setCostRateIndex(CostRateIndex.Kind val) {
-        setCostRateIndex(java.util.Objects.requireNonNull(val, "costRateIndex").code());
-    }
+class ProjectEventKindTest {
+	@Test
+	void typedKindsKeepStableCodesAndLegacyUnknownValues() {
+		ProjectEvent nameChanged = new ProjectEvent(this, ProjectEvent.Kind.NAME_CHANGED, null, "old");
+		assertEquals(1, nameChanged.getType());
+		assertEquals(ProjectEvent.Kind.NAME_CHANGED, nameChanged.getKind());
+
+		ProjectEvent legacy = new ProjectEvent(this, 99, null, null);
+		assertEquals(99, legacy.getType());
+		assertThrows(IllegalArgumentException.class, legacy::getKind);
+
+		assertEquals(ProjectEvent.Kind.GROUP_DIRTY_CHANGED, ProjectEvent.Kind.fromCode(2));
+	}
 }

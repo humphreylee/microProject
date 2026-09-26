@@ -1,7 +1,6 @@
 /*******************************************************************************
  * MIT License
  *
- * Copyright (c) 2012-2019 ProjectLibre, Inc.  (Previous Copyright Holder)
  * Copyright (c) 2026 microProject
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,17 +21,28 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *******************************************************************************/
-package com.microproject.pm.costing;
+package com.microproject.pm.criticalpath;
 
-public interface HasCostRateIndex {
-    int getCostRateIndex();
-    void setCostRateIndex(int val);
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-    default CostRateIndex.Kind getCostRateIndexKind() {
-        return CostRateIndex.Kind.fromCodeOrNull(getCostRateIndex());
-    }
+import org.junit.jupiter.api.Test;
 
-    default void setCostRateIndex(CostRateIndex.Kind val) {
-        setCostRateIndex(java.util.Objects.requireNonNull(val, "costRateIndex").code());
-    }
+class TaskReferenceKindTest {
+	@Test
+	void codesAndOppositeKindsPreserveParentBoundarySemantics() {
+		assertEquals(-1, PredecessorTaskList.TaskReference.Kind.PARENT_BEGIN.code());
+		assertEquals(0, PredecessorTaskList.TaskReference.Kind.CHILD.code());
+		assertEquals(1, PredecessorTaskList.TaskReference.Kind.PARENT_END.code());
+		assertEquals(PredecessorTaskList.TaskReference.Kind.PARENT_END,
+				PredecessorTaskList.TaskReference.Kind.PARENT_BEGIN.opposite());
+		assertEquals(PredecessorTaskList.TaskReference.Kind.CHILD,
+				PredecessorTaskList.TaskReference.Kind.CHILD.opposite());
+		assertEquals(PredecessorTaskList.TaskReference.Kind.PARENT_BEGIN,
+				PredecessorTaskList.TaskReference.Kind.PARENT_END.opposite());
+		assertEquals(PredecessorTaskList.TaskReference.Kind.PARENT_BEGIN,
+				PredecessorTaskList.TaskReference.Kind.fromCode(-1));
+		assertThrows(IllegalArgumentException.class,
+				() -> PredecessorTaskList.TaskReference.Kind.fromCode(9));
+	}
 }

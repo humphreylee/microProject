@@ -1,7 +1,6 @@
 /*******************************************************************************
  * MIT License
  *
- * Copyright (c) 2012-2019 ProjectLibre, Inc.  (Previous Copyright Holder)
  * Copyright (c) 2026 microProject
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,17 +21,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *******************************************************************************/
-package com.microproject.pm.costing;
+package com.microproject.pm.assignment.timesheet;
 
-public interface HasCostRateIndex {
-    int getCostRateIndex();
-    void setCostRateIndex(int val);
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-    default CostRateIndex.Kind getCostRateIndexKind() {
-        return CostRateIndex.Kind.fromCodeOrNull(getCostRateIndex());
-    }
+import java.util.EnumSet;
 
-    default void setCostRateIndex(CostRateIndex.Kind val) {
-        setCostRateIndex(java.util.Objects.requireNonNull(val, "costRateIndex").code());
-    }
+import org.junit.jupiter.api.Test;
+
+class AssignmentWorkflowStateTest {
+	@Test
+	void convertsCombinedFlagsToEnumSetAndBackWithoutChangingMasks() {
+		for (AssignmentWorkflowState.Kind kind : AssignmentWorkflowState.Kind.values()) {
+			assertEquals(kind.mask(), AssignmentWorkflowState.maskFromKinds(EnumSet.of(kind)));
+		}
+
+		EnumSet<AssignmentWorkflowState.Kind> combined = EnumSet.of(
+				AssignmentWorkflowState.Kind.NEW,
+				AssignmentWorkflowState.Kind.ACCEPTED);
+		int mask = AssignmentWorkflowState.maskFromKinds(combined);
+		assertEquals(0x05, mask);
+		assertEquals(combined, AssignmentWorkflowState.kindsFromMask(mask));
+		assertEquals(combined, AssignmentWorkflowState.kindsFromMask(mask | 0x40));
+	}
 }

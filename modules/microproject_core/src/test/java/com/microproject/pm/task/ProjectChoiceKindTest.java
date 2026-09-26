@@ -1,7 +1,6 @@
 /*******************************************************************************
  * MIT License
  *
- * Copyright (c) 2012-2019 ProjectLibre, Inc.  (Previous Copyright Holder)
  * Copyright (c) 2026 microProject
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,56 +21,56 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *******************************************************************************/
-package com.microproject.pm.assignment;
+package com.microproject.pm.task;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.Collections;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 
-import com.microproject.pm.assignment.timesheet.TimesheetStatus;
-import com.microproject.pm.resource.ResourceImpl;
 import com.microproject.pm.resource.ResourcePool;
-import com.microproject.pm.task.NormalTask;
-import com.microproject.pm.task.Project;
 import com.microproject.undo.DataFactoryUndoController;
 
-class AssignmentTimesheetBehaviorTest {
+class ProjectChoiceKindTest {
 	@Test
-	void applyTimesheetMarksTheAssignmentAndSourceIntegrated() {
-		Assignment assignment = createAssignment();
-		assignment.setTimesheetAssignment(true);
-		assignment.setTimesheetStatus(TimesheetStatus.Kind.VALIDATED);
-
-		long updateTime = 1_717_504_800_000L;
-		boolean updated = assignment.applyTimesheet(Collections.emptyList(), updateTime);
-
-		assertTrue(updated);
-		assertEquals(TimesheetStatus.Kind.INTEGRATED, assignment.getTimesheetStatusKind());
-		assertEquals(TimesheetStatus.Kind.INTEGRATED.code(), assignment.getTimesheetStatus());
-		assertEquals(updateTime, assignment.getLastTimesheetUpdate());
-	}
-
-	@Test
-	void timesheetStatusPredicatesPreserveTheExistingContract() {
-		Assignment assignment = createAssignment();
-		assignment.setTimesheetAssignment(true);
-		assignment.setTimesheetStatus(TimesheetStatus.Kind.ENTERED);
-
-		assertFalse(assignment.isTimesheetEntered());
-		assertTrue(assignment.isTimesheetEditable());
-		assertTrue(assignment.isTimesheetValidated());
-		assertTrue(assignment.isTimesheetRejected());
-	}
-
-	private Assignment createAssignment() {
+	@SuppressWarnings("deprecation")
+	void projectTypeAndStatusKindsRoundTripStableCodes() {
 		Project project = createProject();
-		NormalTask task = createTask(project);
-		ResourceImpl resource = project.getResourcePool().newResourceInstance();
-		return Assignment.getInstance(task, resource, 1.0D, 0);
+
+		project.setProjectTypeKind(ProjectType.Kind.IT);
+		project.setProjectStatusKind(ProjectStatus.Kind.ON_HOLD);
+
+		assertEquals(ProjectType.Kind.IT, project.getProjectTypeKind());
+		assertEquals(ProjectStatus.Kind.ON_HOLD, project.getProjectStatusKind());
+		assertEquals(ProjectType.Kind.IT.code(), project.getProjectType());
+		assertEquals(ProjectStatus.Kind.ON_HOLD.code(), project.getProjectStatus());
+	}
+
+	@Test
+	@SuppressWarnings("deprecation")
+	void unknownLegacyCodesRemainAvailableThroughIntegerAccessors() {
+		Project project = createProject();
+		project.setProjectType(99);
+		project.setProjectStatus(98);
+
+		assertEquals(99, project.getProjectType());
+		assertEquals(98, project.getProjectStatus());
+		assertThrows(IllegalArgumentException.class, project::getProjectTypeKind);
+		assertThrows(IllegalArgumentException.class, project::getProjectStatusKind);
+	}
+
+	@Test
+	void accessControlPolicyKindAdaptsThePersistedCodeAndKeepsUnknownValues() {
+		Project project = createProject();
+		project.setAccessControlPolicy(AccessControlPolicy.Kind.RESTRICTED);
+
+		assertEquals(AccessControlPolicy.Kind.RESTRICTED, project.getAccessControlPolicyKind());
+		assertEquals(AccessControlPolicy.Kind.RESTRICTED.code(), project.getAccessControlPolicy());
+
+		project.setAccessControlPolicy(99);
+		assertEquals(99, project.getAccessControlPolicy());
+		assertNull(project.getAccessControlPolicyKind());
 	}
 
 	private Project createProject() {
@@ -80,11 +79,5 @@ class AssignmentTimesheetBehaviorTest {
 		Project project = Project.createProject(resourcePool, undoController);
 		project.initialize(false, false);
 		return project;
-	}
-
-	private NormalTask createTask(Project project) {
-		NormalTask task = new NormalTask(project);
-		project.connectTask(task);
-		return task;
 	}
 }

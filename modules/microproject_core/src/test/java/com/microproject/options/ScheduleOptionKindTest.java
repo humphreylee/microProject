@@ -1,7 +1,6 @@
 /*******************************************************************************
  * MIT License
  *
- * Copyright (c) 2012-2019 ProjectLibre, Inc.  (Previous Copyright Holder)
  * Copyright (c) 2026 microProject
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,17 +21,26 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *******************************************************************************/
-package com.microproject.pm.costing;
+package com.microproject.options;
 
-public interface HasCostRateIndex {
-    int getCostRateIndex();
-    void setCostRateIndex(int val);
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-    default CostRateIndex.Kind getCostRateIndexKind() {
-        return CostRateIndex.Kind.fromCodeOrNull(getCostRateIndex());
-    }
+import org.junit.jupiter.api.Test;
 
-    default void setCostRateIndex(CostRateIndex.Kind val) {
-        setCostRateIndex(java.util.Objects.requireNonNull(val, "costRateIndex").code());
-    }
+import com.microproject.pm.scheduling.SchedulingType;
+
+class ScheduleOptionKindTest {
+	@Test
+	void schedulingRuleUsesTypedKindAndKeepsIntegerAdapter() {
+		ScheduleOption option = new ScheduleOption();
+		option.setSchedulingRule(SchedulingType.Kind.FIXED_WORK);
+
+		assertEquals(SchedulingType.Kind.FIXED_WORK, option.getSchedulingRuleKind());
+		assertEquals(SchedulingType.Kind.FIXED_WORK.code(), option.getSchedulingRule());
+
+		option.setSchedulingRule(99);
+		assertEquals(99, option.getSchedulingRule());
+		assertThrows(IllegalArgumentException.class, option::getSchedulingRuleKind);
+	}
 }
