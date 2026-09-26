@@ -1,7 +1,6 @@
 /*******************************************************************************
  * MIT License
  *
- * Copyright (c) 2012-2019 ProjectLibre, Inc.  (Previous Copyright Holder)
  * Copyright (c) 2026 microProject
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -24,18 +23,25 @@
  *******************************************************************************/
 package com.microproject.scripting.formulas;
 
-import com.microproject.field.InvalidFormulaException;
-import com.microproject.pm.assignment.Assignment;
-import com.microproject.scripting.Formula;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class AssignmentFormula extends Formula {
-	public Object evaluate(Object object) throws InvalidFormulaException {
-		if (object instanceof Assignment assignment)
-			return Boolean.valueOf(evaluateTask(assignment));
-		return Boolean.FALSE;
-	}
-	public boolean evaluateTask(Assignment task){
-		return task.isAssignment();
-	}
+import org.junit.jupiter.api.Test;
 
+import com.microproject.pm.task.NormalTask;
+import com.microproject.pm.task.Task;
+
+class TaskFormulaTest {
+	@Test
+	void bindsTaskInputsAndRejectsOtherInputTypes() throws Exception {
+		TaskFormula formula = new TaskFormula() {
+			@Override
+			public boolean evaluateTask(Task task) {
+				return task != null;
+			}
+		};
+
+		assertEquals(Boolean.TRUE, formula.evaluate(new NormalTask()));
+		assertEquals(Boolean.FALSE, formula.evaluate(new Object()));
+		assertEquals(Boolean.FALSE, formula.evaluate(null));
+	}
 }
