@@ -1,7 +1,6 @@
 /*******************************************************************************
  * MIT License
  *
- * Copyright (c) 2012-2019 ProjectLibre, Inc.  (Previous Copyright Holder)
  * Copyright (c) 2026 microProject
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,57 +21,27 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *******************************************************************************/
-package com.microproject.graphic.configuration;
+package com.microproject.pm.graphic.network.rendering;
 
-public class FormBoxLayout {
-	boolean defaultZoom=false;
-	String columnGrid=null;
-	String rowGrid=null;
-	String border=null;
-	String titleFont=null,labelFont=null,valueFont=null;
-	public String getBorder() {
-		return border;
+import java.awt.Font;
+
+import com.microproject.graphic.configuration.FormBoxLayout;
+import com.microproject.util.Environment;
+import com.microproject.util.FontUtil;
+
+final class NetworkFormFontResolver {
+	private NetworkFormFontResolver() {
 	}
-	public void setBorder(String border) {
-		this.border = border;
+
+	static Font resolve(FormBoxLayout layout, String type) {
+		String fontName = switch (type == null ? "" : type) {
+			case "title" -> layout.getTitleFont();
+			case "label" -> layout.getLabelFont();
+			case "value" -> layout.getValueFont();
+			default -> null;
+		};
+		if (fontName == null && !"title".equals(type) && !"label".equals(type) && !"value".equals(type))
+			return null;
+		return FontUtil.getFont(fontName, Environment.NETWORK_FONT);
 	}
-	public String getColumnGrid() {
-		return columnGrid;
-	}
-	public void setColumnGrid(String columnGrid) {
-		this.columnGrid = columnGrid;
-	}
-	public String getLabelFont() {
-		return labelFont;
-	}
-	public void setLabelFont(String labelFont) {
-		this.labelFont = labelFont;
-	}
-	public String getRowGrid() {
-		return rowGrid;
-	}
-	public void setRowGrid(String rowGrid) {
-		this.rowGrid = rowGrid;
-	}
-	public String getTitleFont() {
-		return titleFont;
-	}
-	public void setTitleFont(String titleFont) {
-		this.titleFont = titleFont;
-	}
-	public String getValueFont() {
-		return valueFont;
-	}
-	public void setValueFont(String valueFont) {
-		this.valueFont = valueFont;
-	}
-	public boolean isDefaultZoom() {
-		return defaultZoom;
-	}
-	public void setDefaultZoom(boolean defaultZoom) {
-		this.defaultZoom = defaultZoom;
-	}
-	
-	
-	
 }
