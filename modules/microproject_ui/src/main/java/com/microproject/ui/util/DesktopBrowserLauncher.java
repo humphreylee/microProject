@@ -21,29 +21,28 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *******************************************************************************/
-package com.microproject.util;
+package com.microproject.ui.util;
 
-/**
- * Opens external URLs through the desktop application's browser integration.
- */
-public final class BrowserControl {
-	@FunctionalInterface
-	public interface BrowserLauncher {
-		void displayURL(String url);
-	}
+import java.awt.Desktop;
+import java.net.URI;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-	private static volatile BrowserLauncher browserLauncher;
+import com.microproject.util.BrowserControl.BrowserLauncher;
 
-	private BrowserControl() {
-	}
+/** Opens links with the operating system's default browser. */
+public final class DesktopBrowserLauncher implements BrowserLauncher {
+	private static final Logger logger = Logger.getLogger(DesktopBrowserLauncher.class.getName());
+	private static final String ERROR_MESSAGE = "Error attempting to launch web browser";
 
-	public static void setBrowserLauncher(BrowserLauncher launcher) {
-		browserLauncher = launcher;
-	}
-
-	public static void displayURL(String url) {
-		BrowserLauncher currentLauncher = browserLauncher;
-		if (currentLauncher != null)
-			currentLauncher.displayURL(url);
+	@Override
+	public void displayURL(String url) {
+		if (!Desktop.isDesktopSupported())
+			return;
+		try {
+			Desktop.getDesktop().browse(new URI(url));
+		} catch (Exception e) {
+			logger.log(Level.WARNING, ERROR_MESSAGE + ": " + url, e);
+		}
 	}
 }

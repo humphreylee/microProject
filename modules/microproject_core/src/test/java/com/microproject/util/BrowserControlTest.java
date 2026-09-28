@@ -23,27 +23,32 @@
  *******************************************************************************/
 package com.microproject.util;
 
-/**
- * Opens external URLs through the desktop application's browser integration.
- */
-public final class BrowserControl {
-	@FunctionalInterface
-	public interface BrowserLauncher {
-		void displayURL(String url);
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+
+class BrowserControlTest {
+	@AfterEach
+	void clearBrowserLauncher() {
+		BrowserControl.setBrowserLauncher(null);
 	}
 
-	private static volatile BrowserLauncher browserLauncher;
+	@Test
+	void delegatesUrlOpeningToInstalledLauncher() {
+		String[] openedUrl = new String[1];
+		BrowserControl.setBrowserLauncher(url -> openedUrl[0] = url);
 
-	private BrowserControl() {
+		BrowserControl.displayURL("https://example.test/help");
+
+		assertEquals("https://example.test/help", openedUrl[0]);
 	}
 
-	public static void setBrowserLauncher(BrowserLauncher launcher) {
-		browserLauncher = launcher;
-	}
+	@Test
+	void doesNothingWhenNoDesktopLauncherIsInstalled() {
+		BrowserControl.setBrowserLauncher(null);
 
-	public static void displayURL(String url) {
-		BrowserLauncher currentLauncher = browserLauncher;
-		if (currentLauncher != null)
-			currentLauncher.displayURL(url);
+		assertDoesNotThrow(() -> BrowserControl.displayURL("https://example.test/help"));
 	}
 }
