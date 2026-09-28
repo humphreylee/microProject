@@ -1,7 +1,6 @@
 /*******************************************************************************
  * MIT License
  *
- * Copyright (c) 2012-2019 ProjectLibre, Inc.  (Previous Copyright Holder)
  * Copyright (c) 2026 microProject
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,17 +21,36 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *******************************************************************************/
-package com.microproject.util;
+package com.microproject.ui.util;
 
 import java.awt.Font;
-public class FontUtil {
-	public static Font getFont(String fontName,int type){
-		Font font=Font.decode(Environment.getFont(type));
-		if (fontName==null) return font;
-		Font newFont=font.decode(fontName);
-		if (newFont.getName().equals("_Default_"))
-			return font.deriveFont(newFont.getStyle(),newFont.getSize()+font.getSize()-12);
-		else return newFont; 
+import java.awt.GraphicsEnvironment;
+import java.util.Enumeration;
+
+import javax.swing.UIManager;
+import javax.swing.plaf.FontUIResource;
+
+/** Swing-specific font operations owned by the desktop presentation layer. */
+public final class SwingFontUtil {
+	private SwingFontUtil() {
 	}
 
+	public static void setUIFont(String font) {
+		for (Enumeration<?> keys = UIManager.getDefaults().keys(); keys.hasMoreElements();) {
+			Object key = keys.nextElement();
+			if (UIManager.get(key) instanceof FontUIResource)
+				UIManager.put(key, new FontUIResource(Font.decode(font)));
+		}
+	}
+
+	public static String getValidFont(String[] fonts) {
+		String[] availableFonts = GraphicsEnvironment.getLocalGraphicsEnvironment().getAvailableFontFamilyNames();
+		for (String font : fonts) {
+			for (String availableFont : availableFonts) {
+				if (availableFont.equals(font))
+					return font;
+			}
+		}
+		return null;
+	}
 }
