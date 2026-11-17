@@ -25,6 +25,9 @@ package com.microproject.pm.graphic.views;
 
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Insets;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.SortedSet;
@@ -109,6 +112,7 @@ public class GanttView extends SplittedView implements BaseView, ScheduleEventLi
 	private TaskSelectionController taskSelectionController;
 	private boolean synchronizingRowGeometry;
 	private Runnable columnHeaderHeightBinding;
+	private ComponentAdapter initialProjectFitListener;
 	private final TableColumnModelListener dividerColumnListener = new TableColumnModelListener() {
 		@Override public void columnAdded(TableColumnModelEvent event) { requestDividerBoundsEnforcement(); }
 		@Override public void columnRemoved(TableColumnModelEvent event) { requestDividerBoundsEnforcement(); }
@@ -181,6 +185,7 @@ public class GanttView extends SplittedView implements BaseView, ScheduleEventLi
 		columnHeaderHeightBinding = ganttScrollPane.followColumnHeaderHeight(spreadSheet);
 	}
 	public void cleanUp() {
+		removeInitialProjectFitListener();
 		if (columnHeaderHeightBinding != null) {
 			columnHeaderHeightBinding.run();
 			columnHeaderHeightBinding = null;
@@ -256,6 +261,9 @@ public class GanttView extends SplittedView implements BaseView, ScheduleEventLi
 		gantt.setDefaultTaskBarColor(documentFrame.getGraphicManager().getPreferences().getDefaultGanttBarColor());
 		gantt.setDefaultMilestoneShape(documentFrame.getGraphicManager().getPreferences().getDefaultMilestoneShape());
 		gantt.setTrackingView(tracking);
+		com.microproject.pm.task.ProgressLineSettings progressLineSettings = project.getProgressLineSettings();
+		if (progressLineSettings != null)
+			setProgressLineEnabled(progressLineSettings.showCurrentLine() || progressLineSettings.showRecurringLines());
 		gantt.setBarStyles((BarStyles) Dictionary.get(BarStyles.category, DEFAULT_GANTT_BAR_STYLE));
 		ganttScrollPane = new ScaledScrollPane(gantt, coord, documentFrame, spreadSheet.getRowHeight());
 		ganttScrollPane.preserveCenterDateOnWidthResize();
@@ -268,9 +276,45 @@ public class GanttView extends SplittedView implements BaseView, ScheduleEventLi
 	protected int preferredLeftPaneWidth() {
 		if (spreadSheet == null || leftScrollPane == null)
 			return -1;
+		int equalSplit = equalPaneDividerLocation(getWidth(), getInsets(), getDividerSize());
+		if (equalSplit < 0)
+			return -1;
 		int viewportWidth = leftScrollPane.getViewport().getExtentSize().width;
 		int paneChrome = Math.max(0, leftScrollPane.getWidth() - viewportWidth);
-		return spreadSheet.getPreferredSize().width + paneChrome;
+		int readableColumnsWidth = spreadSheet.getPreferredSize().width + paneChrome;
+		// The task table must be able to show its default readable columns through
+		// Finish (#432).  An even split is only a starting point: on narrower windows
+		// it leaves the sheet viewport short of the Finish column and clips the value.
+		// SplittedView still reserves the Gantt's font-scaled minimum below, so a wide
+		// content-driven table never starves the timeline.
+		return Math.max(equalSplit, readableColumnsWidth);
+	}
+
+	static int equalPaneDividerLocation(int width, Insets insets, int dividerSize) {
+		int availableWidth = width - insets.left - insets.right - dividerSize;
+		return availableWidth <= 0 ? -1 : availableWidth / 2;
+	}
+
+	/** Fits the initial Gantt range after the split pane has received its first layout. */
+	public void fitProjectRangeOnInitialDisplay() {
+		if (ganttScrollPane == null)
+			return;
+		initialProjectFitListener = new ComponentAdapter() {
+			@Override public void componentResized(ComponentEvent event) { tryInitialProjectFit(); }
+		};
+		ganttScrollPane.addComponentListener(initialProjectFitListener);
+		SwingUtilities.invokeLater(this::tryInitialProjectFit);
+	}
+
+	private void tryInitialProjectFit() {
+		if (ganttScrollPane != null && SelectedTasksTimescaleZoom.zoomProject(project, coord, ganttScrollPane))
+			removeInitialProjectFitListener();
+	}
+
+	private void removeInitialProjectFitListener() {
+		if (ganttScrollPane != null && initialProjectFitListener != null)
+			ganttScrollPane.removeComponentListener(initialProjectFitListener);
+		initialProjectFitListener = null;
 	}
 
 	@Override
@@ -647,11 +691,16 @@ public class GanttView extends SplittedView implements BaseView, ScheduleEventLi
 		applyBarFormat(gantt, ws);
 		setOutlineNumbersVisible(ws.outlineNumbersVisible != null && ws.outlineNumbersVisible.booleanValue());
 		setSummaryTasksVisible(ws.summaryTasksVisible == null || ws.summaryTasksVisible.booleanValue());
-		gantt.setProgressLineEnabled(ws.progressLineEnabled);
+		com.microproject.pm.task.ProgressLineSettings progressLineSettings = project == null
+			? null : project.getProgressLineSettings();
+		boolean progressLineVisible = progressLineSettings == null
+			? ws.progressLineEnabled
+			: progressLineSettings.showCurrentLine() || progressLineSettings.showRecurringLines();
+		gantt.setProgressLineEnabled(progressLineVisible);
 		if (tracking)
-			trackingProgressLineEnabled = ws.progressLineEnabled;
+			trackingProgressLineEnabled = progressLineVisible;
 		else
-			standardProgressLineEnabled = ws.progressLineEnabled;
+			standardProgressLineEnabled = progressLineVisible;
 		ganttScrollPane.restoreWorkspace(ws.scrollPane, context);
 		restoreDividerLocation(ws.dividerLocation);
 	}

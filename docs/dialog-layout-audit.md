@@ -155,9 +155,64 @@ rg -n "new FormLayout|preferredFormRows" modules/microproject_ui/src/main/java/c
 | Resource Information | Preferred content 400×275 dlu; initial dialog minimum is its first packed size | Center on owning frame | Tabbed content expands; each form row remains font-preferred |
 | Resource Mapping | Natural `pack()` size is the minimum; 310dlu growable table column | Center on owning frame | Association table expands; conditional project and access-control rows remain present |
 | Find | Search field requests 30 columns; initial dialog minimum is its first packed size | Center on the active document frame | Search field and form retain preferred heights; direction buttons remain in the button panel |
+| AutoFilter | Natural `pack()` size; the value list scrolls inside a 320×280 preferred viewport | Centered on the owning document frame | Fixed-size form: the user cannot resize; a long value set scrolls instead of stretching the window |
+| Custom column alias (`FieldAliasDialog`) | Natural `pack()` size; old-name label and one alias input | Centered through `AbstractDialog.pack()` | Fixed-size form: the alias input keeps its preferred height and packed width |
+| Status Date | Natural `pack()` size; one date field plus the NA checkbox | Centered by the owning command route | Fixed-size form |
+| Move Project | Natural `pack()` size; one date field | Centered by the owning command route | Fixed-size form |
+| Update Project | Natural `pack()` size; radio groups and two date fields | Centered through `AbstractDialog.pack()` | Fixed-size form |
+
+`AbstractDialog` owns the contract in one place: `initComponents()` calls
+`setResizable(!isFixedSizeForm())`, and `pack()` keeps the first packed size as
+the window minimum. `isFixedSizeForm()` defaults to `false`, so table, list, and
+tabbed surfaces keep their existing resizable behavior; a dialog whose content
+is one bounded form overrides it to `true`.
+`DialogLayoutAssertions.assertFixedSizeForm` checks the non-resizable state, a
+non-zero packed minimum, font-preferred text control heights, and usable-screen
+containment, so a regression that reintroduces a fixed pixel size or a clipped
+field fails the same route test that captured its screenshot. Screenshots are
+written under `build/reports/guiTest-artifacts/issue-724-<dialog>-<locale>-<scale>.png`.
+
+The 2026-10-05 candidate inventory is partly stale at `e14251d09`.
+`LookupDialog`, `OpenProjectDialog`, and `LoginDialog` no longer exist in the
+source tree, and `ResourceAdditionDialog` is referenced only by its own factory,
+so it has no production route. Those four are removed from the matrix.
+`FieldAliasDialog` was listed in the inventory and is now covered through the
+task-table header popup (and the Custom Fields &gt; Rename button).
+`RenameDialog` is a separate, still-uncovered surface reached by clicking the
+current column in the column-list popup.
 
 The shared GUI assertions now exercise the target surface after growth and
 check that the top-level window remains inside the usable monitor bounds. The
 first successful pack establishes a lower bound, so manual or automated resize
 must grow from that size; dialogs should never use fixed pixel offsets to fake
 fit on a particular monitor.
+
+## Whole-window inventory (#863)
+
+This section extends the dialog contract above to all top-level windows as
+tracked by #863. It reuses the #724 evidence instead of duplicating it: a dialog
+already listed in the dialog size table above keeps that row as its single size
+contract, and this table records only the window-level audit state.
+
+Inventory taken at `c7d6ff041` (current master, after PRs #1214, #1219, #1209, #1188, #1199) with a source scan of `class ... extends JFrame/JDialog/Frame` under `modules/microproject_ui/src/main/java`. The earlier scan at `8c546d1d5` produced the same class set; no window class was added or removed by those PRs. Counts: 30 `AbstractDialog` subclasses, 10 direct `FlatLafDialog` subclasses, 3 `FlatLafFrame` subclasses, 1 `JFrame`, 1 `JDialog`, plus 2 `DialogEntrySpreadSheet` panels that are not top-level windows.
+
+| Window / surface | Representative state | Blank area intentional? | Evidence / contract source | Audit state |
+|---|---|---|---|---|
+| MainRibbonFrame / MainFrame | Gantt + task table, secondary project/resource windows | Yes — the empty task table and Gantt canvas are the work area | `RibbonTabGuiAcceptanceTest` (204 source refs), `MultipleLocalProjectOpenGuiAcceptanceTest`, `ResourcePoolInitialViewGuiAcceptanceTest` | Covered by physical routes; no uniform-size change |
+| PrintPreviewFrame | Print preview of a page | Yes — margins and page canvas are intentional | `TaskInformationRibbonGuiAcceptanceTest.physicalReportPrintPreviewShowsEveryPageThroughTheSharedGraphPageableRoute`; `GraphPageable` owns the frame and packs it from the page size | Covered by physical route |
+| TaskInformationDialog — General/Text Style/Advanced | Bounded form + growable rows | Mixed: header and form spacing intentional, unused viewport height is not | `TaskInformationRibbonGuiAcceptanceTest.assertTabsUseAvailableScreenHeight` and `assertTaskAssignmentShowsResource`; `scrollableTab()` sizes every tab to one viewport height | Covered; this is the source row for the #724 A10 conclusion |
+| TaskInformationDialog — Resources | Assigned resources spreadsheet | Yes — with one assignment the grid has one data row and the rest is an empty spreadsheet canvas; `SpreadSheet` sets `FillsViewportHeight=true` in `FlatUiSupport.applySpreadsheetTableStyle`, so the grid paints through the viewport | `assertTaskAssignmentShowsResource` asserts `assignmentBounds.height * 2 >= resourcesView.getHeight()`; `TaskResourcesPanel` uses `fill:150dlu:grow`; screenshot `issue-460-task-information-ja-default.png` | Covered; #724 A10 conclusion recorded here |
+| Preferences / Find / Calendar Options / Change Working Time / Recurring Task / Dependency / Resource Leveling / Baseline / Critical Chain / Team Planner / Timeline | Bounded or table-backed forms | Per the dialog size table above | #724 GUI routes plus the class-specific GuiAcceptanceTests listed in the caller inventory | Covered by #724 contract |
+| WelcomeDialog | Start screen, recent-project list | Yes — empty tiles and recent area when no projects | `WelcomeDialogGuiAcceptanceTest` | Covered |
+| About / Help / License | Bounded informational forms | Yes — fixed layout | `LicenseDialog` 19 refs, `HelpDialog` 12 refs, `AboutDialog` 4 refs | Covered by route tests |
+| CustomReportDialogBox / Assignments (Assignment, ReplaceAssignment, Timesheet) | Table/list-backed forms | Table viewport is the work area | Dedicated GuiAcceptanceTests (7 / 13 / 5 / 8 refs) | Covered |
+| PageSetup / FieldDialog / Projects / RenameProject / Gridlines / TransformParameter / XbsDependency | Bounded dialogs reached through a command route | Yes for bounded forms | #724 route tests use command routes, not class names, so the class-name reference count is zero for PageSetup / XbsDependency / TransformParameter / FieldDialog / Projects / RenameProject / Gridlines | Partly covered by #724; these seven need explicit remaining-surface evidence |
+| CustomFieldsDialogBox | Custom fields of selected tasks | Yes — bounded list | `FlatLafLegacyDialogRefreshGuiAcceptanceTest` constructs it directly; `DocumentFrame` opens it through the Custom Fields command | Covered by dialog refresh test; route assertion remains in #724 A8 |
+
+No minimum or preferred size was changed while building this inventory. The
+Resources-tab conclusion is recorded in the row above: the apparent empty area
+is the spreadsheet work canvas, not a layout defect, and the existing
+`assertTaskAssignmentShowsResource` plus `FillsViewportHeight=true` evidence
+closes #724 A10. The remaining unfilled rows are seven bounded dialogs whose
+command-route evidence is tracked in #724 A8; they are deliberately not given a
+second size contract here.
