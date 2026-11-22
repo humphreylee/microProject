@@ -700,10 +700,15 @@ class RibbonTabGuiAcceptanceTest {
 			assertTrue(namedComponent(backstage, "officeBackstageNavigation") != null, "Backstage navigation pane is missing");
 			assertTrue(namedComponent(backstage, "officeBackstageDetails") != null, "Backstage detail pane is missing");
 			assertTrue(namedComponent(backstage, "officeBackstageNav-share") == null, "Unsupported Share destination must not be exposed");
+			assertTrue(namedComponent(backstage, "officeBackstageNav-home") != null, "Home destination is missing");
+			assertTrue(((AbstractButton) namedComponent(backstage, "officeBackstageNav-home")).isSelected(),
+				"Opening Backstage must select Home first");
+			assertTrue(namedComponent(backstage, "officeBackstagePage-home") != null, "Home page is not rendered first");
 			assertTrue(namedComponent(backstage, "officeBackstageNav-info") != null, "Project Info destination is missing");
 			assertTrue(namedComponent(backstage, "officeBackstageNav-options") != null, "Options destination is missing");
-			assertTrue(namedComponent(backstage, "officeBackstageNav-account") == null,
-				"Account destination must be absent without an account/licensing service");
+			AbstractButton account = (AbstractButton) namedComponent(backstage, "officeBackstageNav-account");
+			assertTrue(account != null && account.isShowing(),
+				"Account destination must exist as a product-information page without a sign-in service");
 			AbstractButton newProject = (AbstractButton)namedComponent(backstage, "officeBackstageCommand-RibbonNewProject");
 			assertTrue(newProject != null && newProject.isShowing(), "New must be available in Backstage details");
 			assertTrue(newProject.isEnabled(), "New must be enabled on the File ribbon without a document");
@@ -711,15 +716,28 @@ class RibbonTabGuiAcceptanceTest {
 			JComponent navigation = (JComponent)namedComponent(backstage, "officeBackstageNavigation");
 			assertEquals(com.microproject.ui.theme.MicroProjectTheme.tokens().backstageNavigationBackground(),
 				navigation.getBackground(), "Backstage navigation must use the theme's accent navigation colour");
-			int previousY = namedComponent(backstage, "officeBackstageBack").getLocationOnScreen().y;
-			for (String page : new String[] { "new", "open", "info", "save", "saveAs", "print", "export", "close", "options" }) {
+			// On a short screen the destination list scrolls between Back and the pinned Options entry,
+			// so the order is checked inside the list and Options must sit below the list's visible area.
+			Component destinationList = namedComponent(backstage, "officeBackstageDestinations");
+			Component destinationScroll = namedComponent(backstage, "officeBackstageDestinationScroll");
+			assertTrue(destinationList != null && destinationScroll != null, "Backstage destination list is missing");
+			assertTrue(namedComponent(backstage, "officeBackstageBack").getLocationOnScreen().y
+				< destinationScroll.getLocationOnScreen().y, "Back must sit above the Backstage destinations");
+			int previousY = Integer.MIN_VALUE;
+			for (String page : new String[] { "home", "new", "open", "info", "save", "saveAs", "print", "export", "close", "account" }) {
 				Component destination = namedComponent(backstage, "officeBackstageNav-" + page);
 				assertTrue(destination != null && destination.isShowing(), "Backstage destination is not visible: " + page);
-				int y = destination.getLocationOnScreen().y;
+				assertTrue(SwingUtilities.isDescendingFrom(destination, destinationList),
+					"Backstage destination must be in the destination list: " + page);
+				int y = SwingUtilities.convertPoint(destination, 0, 0, destinationList).y;
 				assertTrue(y > previousY, "Backstage destination is out of order: " + page);
 				previousY = y;
 			}
 			Component options = namedComponent(backstage, "officeBackstageNav-options");
+			assertTrue(options != null && options.isShowing(), "Backstage destination is not visible: options");
+			assertTrue(options.getLocationOnScreen().y
+				>= destinationScroll.getLocationOnScreen().y + destinationScroll.getHeight(),
+				"Options must be pinned below the Backstage destination list");
 			int navigationBottom = navigation.getLocationOnScreen().y + navigation.getHeight();
 			assertTrue(navigationBottom - (options.getLocationOnScreen().y + options.getHeight()) <= 16,
 				"Options must be pinned to the bottom of the Backstage navigation");
@@ -768,6 +786,21 @@ class RibbonTabGuiAcceptanceTest {
 		assertTrue(namedComponent(frame.getRootPane(), "officeBackstageCommand-RibbonBackstageOptions") != null,
 			"Options destination omitted the existing General Options action");
 		captureVisibleRibbon(robot, "ribbon-file-backstage-options.png");
+		clickCommand(robot, (AbstractButton)namedComponent(frame.getRootPane(), "officeBackstageNav-account"));
+		JComponent accountPage = (JComponent) namedComponent(frame.getRootPane(), "officeBackstageAccountPage");
+		assertTrue(accountPage != null && accountPage.isShowing(),
+			"Account page must render product information without a sign-in service");
+		assertTrue(namedComponent(frame.getRootPane(), "officeBackstageAccountTheme") instanceof javax.swing.JComboBox<?> theme
+			&& theme.getItemCount() == 2, "Account must expose the light/dark theme selector");
+		StringBuilder accountText = new StringBuilder();
+		for (Component component : UiComponentWalker.flatten(accountPage)) {
+			if (component instanceof JLabel label && label.getText() != null) accountText.append(label.getText()).append(' ');
+			if (component instanceof AbstractButton button && button.getText() != null) accountText.append(button.getText()).append(' ');
+		}
+		String accountCopy = accountText.toString().toLowerCase(Locale.ROOT);
+		assertTrue(!accountCopy.contains("sign in") && !accountCopy.contains("microsoft 365")
+			&& !accountCopy.contains("connected"), "Account must not offer sign-in or connected services: " + accountCopy);
+		captureVisibleRibbon(robot, "ribbon-file-backstage-account.png");
 		clickCommand(robot, (AbstractButton)namedComponent(frame.getRootPane(), "officeBackstageNav-new"));
 		String actionId = manager.getToolBarFactory().getActionStringFromId("RibbonNewProject");
 		int before = actions.count(actionId);
@@ -884,6 +917,61 @@ class RibbonTabGuiAcceptanceTest {
 				"Applying preferences left the task table unresponsive to a physical row click");
 			captureVisibleRibbon(robot, "preferences-apply-preserved-ribbon.png");
 		}
+	}
+
+	/** Issue #1119: PDF export belongs to Export, not Print, and stays physically runnable there. */
+	@Test
+	void exportPageDispatchesPdfAndPrintPageOmitsPdf() throws Exception {
+		Assumptions.assumeFalse(GraphicsEnvironment.isHeadless(),
+				"A desktop session is required for Backstage page coverage.");
+		RecordingActionMap actions = new RecordingActionMap();
+		MenuManager manager = MenuManager.getInstance(actions);
+		MainRibbonFrame applicationFrame = new MainRibbonFrame("Backstage export page", "");
+		MicroProjectShell.installRibbonShell(applicationFrame, manager, null);
+		frame = applicationFrame;
+		JPanel host = applicationFrame.getRibbonPanel();
+		SwingUtilities.invokeAndWait(() -> {
+			frame.setSize(1100, 700);
+			frame.setLocation(0, 0);
+			frame.setVisible(true);
+		});
+		Robot robot = new com.microproject.testsupport.GuiRobot();
+		robot.setAutoDelay(40);
+		String fileTitle = MenuDefinitionSupport.menuBundle(Locale.getDefault()).getString("FileRibbonTask.title");
+
+		click(robot, findButton(host, fileTitle));
+		GuiAcceptanceSupport.await(() -> findShowingComponent(frame, "officeBackstageOverlay") != null,
+				"File tab did not open Backstage");
+		clickCommand(robot, (AbstractButton) findShowingComponent(frame, "officeBackstageNav-export"));
+		GuiAcceptanceSupport.await(() -> findShowingComponent(frame, "officeBackstageExportPage") != null,
+				"Export page did not open");
+		robot.waitForIdle();
+		captureVisibleRibbon(robot, "ribbon-file-backstage-export.png");
+		AbstractButton pdf = (AbstractButton) findShowingComponent(frame, "officeBackstageCommand-RibbonPDF");
+		assertTrue(pdf != null && pdf.isEnabled(), "Export page must expose an enabled PDF export command");
+		String actionId = manager.getToolBarFactory().getActionStringFromId("RibbonPDF");
+		int before = actions.count(actionId);
+		clickCommand(robot, pdf);
+		GuiAcceptanceSupport.await(() -> actions.count(actionId) == before + 1,
+				"Robot click did not dispatch PDF export from the Export page");
+		GuiAcceptanceSupport.await(() -> findShowingComponent(frame, "officeBackstageOverlay") == null,
+				"Backstage stayed open after PDF export");
+
+		click(robot, findButton(host, fileTitle));
+		GuiAcceptanceSupport.await(() -> findShowingComponent(frame, "officeBackstageOverlay") != null,
+				"File tab did not reopen Backstage");
+		clickCommand(robot, (AbstractButton) findShowingComponent(frame, "officeBackstageNav-saveAs"));
+		GuiAcceptanceSupport.await(() -> findShowingComponent(frame, "officeBackstageSaveAsPage") != null,
+				"Save As page did not open");
+		robot.waitForIdle();
+		captureVisibleRibbon(robot, "ribbon-file-backstage-saveas.png");
+		clickCommand(robot, (AbstractButton) findShowingComponent(frame, "officeBackstageNav-print"));
+		GuiAcceptanceSupport.await(() -> findShowingComponent(frame, "officeBackstagePrintPage") != null,
+				"Print page did not open");
+		assertTrue(findShowingComponent(frame, "officeBackstageCommand-RibbonPDF") == null,
+				"Print page must not show PDF export after it moved to Export");
+		robot.waitForIdle();
+		captureVisibleRibbon(robot, "ribbon-file-backstage-print-no-pdf.png");
 	}
 
 	private static Component namedComponent(Component root, String name) {
@@ -1338,6 +1426,13 @@ class RibbonTabGuiAcceptanceTest {
 		Point[] location = new Point[1];
 		assertTrue(button.isShowing(), () -> "physical click target is no longer showing: " + button.getName()
 			+ " command=" + button.getActionCommand() + " text=" + button.getText());
+		// On a short screen a Backstage destination can sit below the scrolled part of its
+		// list; a user scrolls it into view before clicking it.
+		SwingUtilities.invokeAndWait(() -> {
+			if (SwingUtilities.getAncestorOfClass(javax.swing.JViewport.class, button) != null)
+				button.scrollRectToVisible(new java.awt.Rectangle(0, 0, button.getWidth(), button.getHeight()));
+		});
+		robot.waitForIdle();
 		SwingUtilities.invokeAndWait(() -> {
 			Point topLeft = button.getLocationOnScreen();
 			// Split/dropdown buttons reserve their right edge for the arrow; the
@@ -1552,6 +1647,19 @@ class RibbonTabGuiAcceptanceTest {
 			usable.y += screenInsets.top;
 			usable.width -= screenInsets.left + screenInsets.right;
 			usable.height -= screenInsets.top + screenInsets.bottom;
+			// At a fractional scale, Java reports both rectangles in whole logical pixels, rounded from
+			// device pixels separately. A root pane that fills the work area from its origin can then end
+			// one logical pixel past it: in CI at 125%, 1024x720 device px reads as a work area of 819x576
+			// and a root pane of 820x577, and at 150% as 683x480 and 683x481. Accept exactly that
+			// rounding remainder, only for an origin-aligned root pane, and nothing at an integer scale.
+			java.awt.geom.AffineTransform transform = rootPane.getGraphicsConfiguration().getDefaultTransform();
+			Rectangle root = bounds[0];
+			if (root.x == usable.x && root.y == usable.y) {
+				if (transform.getScaleX() != Math.rint(transform.getScaleX()) && root.width == usable.width + 1)
+					usable.width += 1;
+				if (transform.getScaleY() != Math.rint(transform.getScaleY()) && root.height == usable.height + 1)
+					usable.height += 1;
+			}
 			usableBounds[0] = usable;
 		});
 		BufferedImage screenshot = robot.createScreenCapture(bounds[0]);

@@ -1444,6 +1444,8 @@ public class GraphicManager implements  FrameHolder, NamedFrameListener, WindowS
 
 
 	protected class CreateSubprojectEdit extends AbstractUndoableEdit{
+		private static final long serialVersionUID = 1270771120330978599L;
+
 		protected Project project;
 		protected final Node subprojectNode;
 		protected long subprojectUniqueId;
@@ -2191,7 +2193,22 @@ public class GraphicManager implements  FrameHolder, NamedFrameListener, WindowS
 		private static final long serialVersionUID = 1L;
 		public void actionPerformed(ActionEvent arg0) {
 			setMeAsLastGraphicManager();
-			executeExternalRibbonCommand("openProject", GraphicManager.this::doRecentProjectsDialog);
+			String requested = arg0 == null ? null : arg0.getActionCommand();
+			if (isRecentProjectPath(requested)) {
+				String path = requested;
+				executeExternalRibbonCommand("openProject", () -> loadLocalDocument(path, false));
+			} else {
+				executeExternalRibbonCommand("openProject", GraphicManager.this::doRecentProjectsDialog);
+			}
+		}
+		/** A Backstage row passes the project path as the command value; a normal click does not. */
+		private boolean isRecentProjectPath(String value) {
+			if (value == null || value.isBlank()) return false;
+			try {
+				return java.nio.file.Path.of(value).isAbsolute();
+			} catch (RuntimeException invalidPath) {
+				return false;
+			}
 		}
 		protected boolean allowed(boolean enable){
 			DocumentFrame dframe = getCurrentFrame();
@@ -2349,7 +2366,9 @@ public class GraphicManager implements  FrameHolder, NamedFrameListener, WindowS
 		private static final long serialVersionUID = 1L;
 		public void actionPerformed(ActionEvent arg0) {
 			setMeAsLastGraphicManager();
-			showPreferences(false);
+			// The Quick Access Toolbar menu asks for its own category through the action command.
+			showPreferences(arg0 != null && PreferencesDialogBox.CATEGORY_QUICK_ACCESS.equals(arg0.getActionCommand())
+				? PreferencesDialogBox.CATEGORY_QUICK_ACCESS : PreferencesDialogBox.CATEGORY_GENERAL);
 		}
 	}
 
@@ -2579,7 +2598,8 @@ public class GraphicManager implements  FrameHolder, NamedFrameListener, WindowS
 		private static final long serialVersionUID = 1L;
 		public void actionPerformed(ActionEvent arg0) {
 			setMeAsLastGraphicManager();
-				executeExternalRibbonCommand("saveAsProject", () -> saveLocalProject(true));
+				Path folder = saveAsFolderFromCommand(arg0 == null ? null : arg0.getActionCommand());
+				executeExternalRibbonCommand("saveAsProject", () -> saveLocalProject(true, folder));
 		}
 		protected boolean allowed(boolean enable) {
 			if (enable==false) return true;
@@ -3683,14 +3703,14 @@ public class GraphicManager implements  FrameHolder, NamedFrameListener, WindowS
 	}
 
 	private void showLocaleDialog() {
-		showPreferences(true);
+		showPreferences(PreferencesDialogBox.CATEGORY_LANGUAGE);
 	}
 
-	private void showPreferences(boolean showLocaleTab) {
+	private void showPreferences(String categoryId) {
 		Preferences pref = Preferences.userNodeForPackage(ConfigurationFile.class);
 		String previousLocale = pref.get("locale", "default");
 		PreferencesDialogBox.showDialog(getFrame(), getPreferences(), () -> applyLocaleChange(previousLocale),
-			autoRecoveryManager, showLocaleTab);
+			autoRecoveryManager, categoryId);
 	}
 
 	private void applyLocaleChange(String previousLocale) {
@@ -5013,6 +5033,15 @@ public class GraphicManager implements  FrameHolder, NamedFrameListener, WindowS
 	}
 
 	public boolean saveLocalProject(boolean saveAs){
+		return saveLocalProject(saveAs, null);
+	}
+
+	/**
+	 * Runs the same local save chooser, optionally starting it in a folder picked
+	 * on the Backstage Save As page.  Only the suggested path changes; the chooser
+	 * and the existing save routine remain the single save flow.
+	 */
+	boolean saveLocalProject(boolean saveAs, Path initialFolder){
 		if (getCurrentFrame() == null || getCurrentFrame().getProject() == null) return false;
 		Project project=getCurrentFrame().getProject();
 		String fileName = project.getFileName();
@@ -5020,6 +5049,7 @@ public class GraphicManager implements  FrameHolder, NamedFrameListener, WindowS
 		if (chooseSaveAs) {
 			String suggested = com.microproject.application.ProjectFilePolicies.defaultSaveAsFileName(
 				fileName == null ? project.getGuessedFileName() : fileName);
+			suggested = saveAsInFolder(suggested, initialFolder);
 			fileName = SessionFactory.getInstance().getLocalSession().chooseFileName(true, suggested);
 		} else if (fileName == null) {
 			fileName = SessionFactory.getInstance().getLocalSession().chooseFileName(true, project.getGuessedFileName());
@@ -5029,6 +5059,29 @@ public class GraphicManager implements  FrameHolder, NamedFrameListener, WindowS
 			return true;
 		}
 		return false;
+	}
+
+	/** A Backstage folder choice arrives as an absolute directory command value. */
+	public static Path saveAsFolderFromCommand(String value) {
+		if (value == null || value.isBlank()) return null;
+		try {
+			Path candidate = Path.of(value);
+			if (!candidate.isAbsolute() || !java.nio.file.Files.isDirectory(candidate)) return null;
+			return candidate.toAbsolutePath().normalize();
+		} catch (RuntimeException invalidPath) {
+			return null;
+		}
+	}
+
+	/** Keeps the default MPO file name while pointing the existing chooser at the picked folder. */
+	public static String saveAsInFolder(String suggested, Path folder) {
+		if (suggested == null || suggested.isBlank() || folder == null) return suggested;
+		try {
+			Path name = Path.of(suggested).getFileName();
+			return name == null ? suggested : folder.resolve(name).toString();
+		} catch (RuntimeException invalidPath) {
+			return suggested;
+		}
 	}
 
 	/** Shows the local save chooser and forces the master portable format. */
